@@ -14,6 +14,7 @@ namespace Managed {
         private MeshRenderer[] _renderers;
         private CellState[] _states;
         private Vector3[] _worldPositions;
+        private CellProperties[] _cellProperties;
         private static readonly int c_color_hash = Shader.PropertyToID("_BaseColor");
         private Vector3 _positionCache = new Vector3(0, 0, 0);
         private SimulationInputModule _inputModule = new SimulationInputModule();
@@ -32,18 +33,20 @@ namespace Managed {
             _renderers = new MeshRenderer[count];
             _states = new CellState[count];
             _worldPositions = new Vector3[count];
+            _cellProperties = new CellProperties[count];
             _camera.orthographicSize = gridProperties.height / 2f;
             _camera.transform.position = new Vector3(gridProperties.width / 2f, gridProperties.height / 2f, _camera.transform.position.z);
 
             for (int i = 0; i < gridProperties.height; i++) {
                 for (int j = 0; j < gridProperties.width; j++) {
-                    int id = GetCellID(i, j, gridProperties.height);
+                    int id = GetCellID(i, j, gridProperties.height, gridProperties.width);
                     var instance = Instantiate(cellRef, transform);
                     _positionCache.Set(j * gridProperties.offset, i * gridProperties.offset, 0);
                     instance.transform.position = _positionCache;
                     _renderers[id] = instance;
                     _worldPositions[id] = _positionCache;
                     _states[id] = CellState.Death;
+                    _cellProperties[id].neighborCount = 0;
                     SetCellVisual(_states[id], _renderers[id]);
                 }
             }
@@ -103,7 +106,78 @@ namespace Managed {
 
         private void Simulate() {
             _iteration++;
+            RefreshCellNeighbors();
+            ApplySimulationLogic();
             Debug.Log("Advance iteration: " + _iteration);
+        }
+
+        private void ApplySimulationLogic() {
+            for (int i = 0; i < _cellProperties.Length; i++) {
+                var id = i;
+                var cellProp = _cellProperties[id];
+                var state = _states[id];
+                if (state == CellState.Alive) {
+                    if (cellProp.neighborCount < 2) {
+                        TrySetState(id, CellState.Death);
+                    }
+
+                    if (cellProp.neighborCount > 3) {
+                        TrySetState(id, CellState.Death);
+                    }
+                }
+                else {
+                    if (cellProp.neighborCount == 3) {
+                        TrySetState(id, CellState.Alive);
+                    }
+                }
+            }
+        }
+
+        private void RefreshCellNeighbors() {
+            for (int i = 0; i < _cellProperties.Length; i++) {
+                int id = i;
+                _cellProperties[id].neighborCount = 0;
+                GetCellCoordinate(id, gridProperties.width, gridProperties.height, out int hIndex, out int wIndex);
+                int[] directions = new int[8];
+                int left = GetCellID(hIndex, wIndex - 1, gridProperties.height, gridProperties.width);
+                int leftUp = GetCellID(hIndex + 1, wIndex - 1, gridProperties.height, gridProperties.width);
+                int up = GetCellID(hIndex + 1, wIndex, gridProperties.height, gridProperties.width);
+                int rightUp = GetCellID(hIndex + 1, wIndex + 1, gridProperties.height, gridProperties.width);
+                int right = GetCellID(hIndex, wIndex + 1, gridProperties.height, gridProperties.width);
+                int rightDown = GetCellID(hIndex - 1, wIndex + 1, gridProperties.height, gridProperties.width);
+                int down = GetCellID(hIndex - 1, wIndex, gridProperties.height, gridProperties.width);
+                int leftDown = GetCellID(hIndex - 1, wIndex - 1, gridProperties.height, gridProperties.width);
+
+                directions[0] = left;
+                directions[1] = leftUp;
+                directions[2] = up;
+                directions[3] = rightUp;
+                directions[4] = right;
+                directions[5] = rightDown;
+                directions[6] = down;
+                directions[7] = leftDown;
+
+                for (int j = 0; j < directions.Length; j++) {
+                    var directionID = directions[j];
+                    if (IsValid(directionID)) {
+                        if (_states[directionID] == CellState.Alive) {
+                            _cellProperties[id].neighborCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        private bool IsValid(int id) {
+            if (id < 0) {
+                return false;
+            }
+
+            if (id > (gridProperties.height * gridProperties.width - 1)) {
+                return false;
+            }
+
+            return true;
         }
 
         private void TrySetState(int id, CellState state) {
@@ -124,7 +198,6 @@ namespace Managed {
             return mousePos.x >= minX && mousePos.x < maxX && mousePos.y >= minY && mousePos.y < maxY;
         }
 
-
         public static void SetCellVisual(CellState state, MeshRenderer renderer) {
             Color color = default;
             switch (state) {
@@ -139,8 +212,26 @@ namespace Managed {
             renderer.material.SetColor(c_color_hash, color);
         }
 
-        public static int GetCellID(int heightIndex, int widthIndex, int height) {
+        public static int GetCellID(int heightIndex, int widthIndex, int height, int width) {
+            if (heightIndex >= height || heightIndex < 0) {
+                return -1;
+            }
+
+            if (widthIndex >= width || widthIndex < 0) {
+                return -1;
+            }
+
+
             return heightIndex * height + widthIndex;
+        }
+
+        public static void GetCellCoordinate(int id, int width, int height, out int heightIndex, out int widthIndex) {
+            // w10 h10 id 0
+            //hi 0, wi 0
+            // id = 5
+            // hi = 0, wi = 5
+            widthIndex = id % width;
+            heightIndex = id / height;
         }
 
         [Serializable]
@@ -160,6 +251,10 @@ namespace Managed {
         public enum CellState {
             Death,
             Alive,
+        }
+
+        public struct CellProperties {
+            public int neighborCount;
         }
 
         public struct SimulationInput {
