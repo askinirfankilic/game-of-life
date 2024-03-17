@@ -33,7 +33,7 @@ namespace Game {
             for (int i = 0; i < gridProperties.height; i++) {
                 for (int j = 0; j < gridProperties.width; j++) {
                     int id = i * gridProperties.height + j;
-                    var instance = Instantiate(cellRef);
+                    var instance = Instantiate(cellRef, transform);
                     _positionCache.Set(j * gridProperties.offset, i * gridProperties.offset, 0);
                     instance.transform.position = _positionCache;
                     _renderers[id] = instance;
@@ -41,6 +41,8 @@ namespace Game {
                     SetCellVisual(_states[id], _renderers[id]);
                 }
             }
+
+            StaticBatchingUtility.Combine(gameObject);
         }
 
         [Serializable]
