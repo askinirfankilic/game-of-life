@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 namespace GameObjects {
-    public class GameOfLifeGameObject : MonoBehaviour {
+    public class GameOfLifeMultipleGameObjects : MonoBehaviour {
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
