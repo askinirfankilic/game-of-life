@@ -12,6 +12,7 @@ namespace Game {
         private CellState[] _states;
         private static readonly int c_color_hash = Shader.PropertyToID("_Color");
         private Vector3 _positionCache = new Vector3(0, 0, 0);
+        private SimulationInputModule _inputModule = new SimulationInputModule();
 
         private void Awake() {
             InitializeGrid(in properties);
@@ -45,18 +46,24 @@ namespace Game {
             StaticBatchingUtility.Combine(gameObject);
         }
 
-        [Serializable]
-        public struct GridProperties {
-            public int width;
-            public int height;
-            public float offset;
+        private void Update() {
+            var input = _inputModule.Update();
+
+            if (input.spaceKeyDown) {
+                Debug.Log("simulation started");
+                return;
+            }
+
+            if (input.mouseClicked) {
+                if (input.mouseKey == MouseKey.Left) {
+                    Debug.Log("set alive" + input.screenPos);
+                }
+                else {
+                    Debug.Log("set death" + input.screenPos);
+                }
+            }
         }
 
-        [Serializable]
-        public enum CellState {
-            Death,
-            Alive,
-        }
 
         public static void SetCellVisual(CellState state, MeshRenderer renderer) {
             Color color = default;
@@ -70,6 +77,57 @@ namespace Game {
             }
 
             renderer.material.SetColor(c_color_hash, color);
+        }
+
+        [Serializable]
+        public struct GridProperties {
+            public int width;
+            public int height;
+            public float offset;
+        }
+
+        [Serializable]
+        public enum CellState {
+            Death,
+            Alive,
+        }
+
+        public struct SimulationInput {
+            public bool mouseClicked;
+            public MouseKey mouseKey;
+            public Vector3 screenPos;
+            public bool spaceKeyDown;
+        }
+
+        public enum MouseKey {
+            Left = 0,
+            Right = 1,
+        }
+
+        public struct SimulationInputModule {
+            public SimulationInput Update() {
+                var input = new SimulationInput();
+                if (Input.GetKeyDown(KeyCode.Space)) {
+                    input.spaceKeyDown = true;
+                    return input;
+                }
+
+                if (Input.GetMouseButtonDown(0)) {
+                    input.mouseClicked = true;
+                    input.mouseKey = MouseKey.Left;
+                    input.screenPos = Input.mousePosition;
+                    return input;
+                }
+
+                if (Input.GetMouseButtonDown(1)) {
+                    input.mouseClicked = true;
+                    input.mouseKey = MouseKey.Right;
+                    input.screenPos = Input.mousePosition;
+                    return input;
+                }
+
+                return default;
+            }
         }
     }
 }
