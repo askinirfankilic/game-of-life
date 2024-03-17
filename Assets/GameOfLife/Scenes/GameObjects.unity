@@ -424,12 +424,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cellRef: {fileID: 4670247243852771998, guid: e1785e737bc1241579afaf0406bdbe28, type: 3}
   gridProperties:
-    width: 50
-    height: 50
+    width: 100
+    height: 100
     offset: 1
   simulationProperties:
     initialEpoch: 0
-    advanceDelay: 1
+    advanceDelay: 0.25
 --- !u!1001 &975311380
 PrefabInstance:
   m_ObjectHideFlags: 0

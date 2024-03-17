@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Managed {
+namespace GameObjects {
     public class GameOfLife : MonoBehaviour {
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
