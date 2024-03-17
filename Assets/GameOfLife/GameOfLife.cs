@@ -1,67 +1,128 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Game {
     public class GameOfLife : MonoBehaviour {
+        [Header("Left Mouse Button: set cell alive")]
+        [Header("Right Mouse Button: set cell dead")]
+        [Header("Space: start simulation")]
         [SerializeField] private MeshRenderer cellRef;
-        [SerializeField] private GridProperties properties;
+
+        [SerializeField] private GridProperties gridProperties;
+        [SerializeField] private SimulationProperties simulationProperties;
 
         private MeshRenderer[] _renderers;
         private CellState[] _states;
-        private static readonly int c_color_hash = Shader.PropertyToID("_Color");
+        private Vector3[] _worldPositions;
+        private static readonly int c_color_hash = Shader.PropertyToID("_BaseColor");
         private Vector3 _positionCache = new Vector3(0, 0, 0);
         private SimulationInputModule _inputModule = new SimulationInputModule();
+        private Camera _camera;
+        private bool _simulationStarted;
+        private float _t = 0;
+        private int _iteration = 0;
 
         private void Awake() {
-            InitializeGrid(in properties);
+            _camera = Camera.main;
+            InitializeGrid(in gridProperties);
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
             int count = gridProperties.height * gridProperties.width;
             _renderers = new MeshRenderer[count];
             _states = new CellState[count];
-            // sol alttan basla
-            // once widthi bitir
-            // sonra hegiht arttir
-            // 0. elemeant i = 0, j = 0
-            // 1. eleman i = 0, j = 1
-            // 2. eleman i = 0, j = 2
-            // on tane var desek
-            // 11. eleaman i = 1, j = 0
+            _worldPositions = new Vector3[count];
+            _camera.orthographicSize = gridProperties.height / 2f;
+            _camera.transform.position = new Vector3(gridProperties.width / 2f, gridProperties.height / 2f, _camera.transform.position.z);
 
             for (int i = 0; i < gridProperties.height; i++) {
                 for (int j = 0; j < gridProperties.width; j++) {
-                    int id = i * gridProperties.height + j;
+                    int id = GetCellID(i, j, gridProperties.height);
                     var instance = Instantiate(cellRef, transform);
                     _positionCache.Set(j * gridProperties.offset, i * gridProperties.offset, 0);
                     instance.transform.position = _positionCache;
                     _renderers[id] = instance;
+                    _worldPositions[id] = _positionCache;
                     _states[id] = CellState.Death;
                     SetCellVisual(_states[id], _renderers[id]);
                 }
             }
 
             StaticBatchingUtility.Combine(gameObject);
+            GC.Collect();
         }
 
         private void Update() {
-            var input = _inputModule.Update();
+            if (!_simulationStarted) {
+                var input = _inputModule.Update();
 
-            if (input.spaceKeyDown) {
-                Debug.Log("simulation started");
+                if (input.spaceKeyDown) {
+                    Debug.Log("simulation started");
+                    _simulationStarted = true;
+                    return;
+                }
+
+                if (input.mouseClicked) {
+                    if (input.mouseKey == MouseKey.Left) {
+                        Debug.Log("set alive" + input.screenPos);
+                        var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
+                        mousePos = new Vector3(mousePos.x, mousePos.y, 0);
+                        for (int i = 0; i < _worldPositions.Length; i++) {
+                            var pos = _worldPositions[i];
+                            if (RectangleCheck(mousePos, pos, gridProperties.offset)) {
+                                int id = i;
+                                TrySetState(id, CellState.Alive);
+                                return;
+                            }
+                        }
+                    }
+                    else {
+                        Debug.Log("set death" + input.screenPos);
+                        var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
+                        mousePos = new Vector3(mousePos.x, mousePos.y, 0);
+                        for (int i = 0; i < _worldPositions.Length; i++) {
+                            var pos = _worldPositions[i];
+                            if (RectangleCheck(mousePos, pos, gridProperties.offset)) {
+                                int id = i;
+                                TrySetState(id, CellState.Death);
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 return;
             }
 
-            if (input.mouseClicked) {
-                if (input.mouseKey == MouseKey.Left) {
-                    Debug.Log("set alive" + input.screenPos);
-                }
-                else {
-                    Debug.Log("set death" + input.screenPos);
-                }
+
+            _t += Time.deltaTime;
+            if (_t > simulationProperties.advanceDelay) {
+                _t = 0;
+                Simulate();
             }
+        }
+
+        private void Simulate() {
+            _iteration++;
+            Debug.Log("Advance iteration: " + _iteration);
+        }
+
+        private void TrySetState(int id, CellState state) {
+            if (_states[id] == state) {
+                return;
+            }
+
+            _states[id] = state;
+            SetCellVisual(_states[id], _renderers[id]);
+        }
+
+        private static bool RectangleCheck(Vector3 mousePos, Vector3 pos, float offset) {
+            var minX = pos.x - offset / 2;
+            var maxX = pos.x + offset / 2;
+            var minY = pos.y - offset / 2;
+            var maxY = pos.y + offset / 2;
+
+            return mousePos.x >= minX && mousePos.x < maxX && mousePos.y >= minY && mousePos.y < maxY;
         }
 
 
@@ -77,6 +138,16 @@ namespace Game {
             }
 
             renderer.material.SetColor(c_color_hash, color);
+        }
+
+        public static int GetCellID(int heightIndex, int widthIndex, int height) {
+            return heightIndex * height + widthIndex;
+        }
+
+        [Serializable]
+        public struct SimulationProperties {
+            public int initialEpoch;
+            public float advanceDelay;
         }
 
         [Serializable]
