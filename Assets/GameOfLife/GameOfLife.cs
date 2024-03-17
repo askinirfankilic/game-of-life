@@ -277,14 +277,14 @@ namespace Managed {
                     return input;
                 }
 
-                if (Input.GetMouseButtonDown(0)) {
+                if (Input.GetMouseButtonDown(0) || Input.GetMouseButton(0)) {
                     input.mouseClicked = true;
                     input.mouseKey = MouseKey.Left;
                     input.screenPos = Input.mousePosition;
                     return input;
                 }
 
-                if (Input.GetMouseButtonDown(1)) {
+                if (Input.GetMouseButtonDown(1) || Input.GetMouseButton(1)) {
                     input.mouseClicked = true;
                     input.mouseKey = MouseKey.Right;
                     input.screenPos = Input.mousePosition;
