@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 namespace GameObjects {
-    public class GameOfLife : MonoBehaviour {
+    public class GameOfLifeGameObject : MonoBehaviour {
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
@@ -66,7 +66,6 @@ namespace GameObjects {
 
                 if (input.mouseClicked) {
                     if (input.mouseKey == MouseKey.Left) {
-                        Debug.Log("set alive" + input.screenPos);
                         var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
                         mousePos = new Vector3(mousePos.x, mousePos.y, 0);
                         for (int i = 0; i < _worldPositions.Length; i++) {
@@ -79,7 +78,6 @@ namespace GameObjects {
                         }
                     }
                     else {
-                        Debug.Log("set death" + input.screenPos);
                         var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
                         mousePos = new Vector3(mousePos.x, mousePos.y, 0);
                         for (int i = 0; i < _worldPositions.Length; i++) {
