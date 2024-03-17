@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Game {
+namespace Managed {
     public class GameOfLife : MonoBehaviour {
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
@@ -49,7 +49,6 @@ namespace Game {
             }
 
             StaticBatchingUtility.Combine(gameObject);
-            GC.Collect();
         }
 
         private void Update() {
