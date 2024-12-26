@@ -38,6 +38,7 @@ namespace RenderMeshInstancedWithJobs {
         private NativeArray<CellState> _currentStates;
         private NativeArray<CellState> _nextStates;
         private NativeArray<int> _neighborCounts;
+        private NativeArray<int> _neighborOffsets;
 
         private void Awake() {
             _chunksCount = SystemInfo.processorCount;
@@ -45,6 +46,8 @@ namespace RenderMeshInstancedWithJobs {
             _propertyBlock = new MaterialPropertyBlock();
             _batchColors = new Vector4[1023];
             _batchMatrices = new Matrix4x4[1023];
+
+            _neighborOffsets = new NativeArray<int>(8, Allocator.Persistent);
 
             InitializeGrid(in gridProperties);
 
@@ -62,6 +65,7 @@ namespace RenderMeshInstancedWithJobs {
             if (_currentStates.IsCreated) _currentStates.Dispose();
             if (_nextStates.IsCreated) _nextStates.Dispose();
             if (_neighborCounts.IsCreated) _neighborCounts.Dispose();
+            if (_neighborOffsets.IsCreated) _neighborOffsets.Dispose();
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
@@ -118,7 +122,6 @@ namespace RenderMeshInstancedWithJobs {
                             }
                         }
                     }
-
                     else {
                         var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
                         mousePos = new Vector3(mousePos.x, mousePos.y, 0);
@@ -147,6 +150,7 @@ namespace RenderMeshInstancedWithJobs {
         [BurstCompile]
         private struct CountNeighborsJob : IJobParallelFor {
             [ReadOnly] public NativeArray<CellState> states;
+            [ReadOnly] public NativeArray<int> neighborOffsets;
             public NativeArray<int> neighborCounts;
             public int width;
             public int height;
@@ -206,6 +210,7 @@ namespace RenderMeshInstancedWithJobs {
 
             var countJob = new CountNeighborsJob {
                 states = _currentStates,
+                neighborOffsets = _neighborOffsets,
                 neighborCounts = _neighborCounts,
                 width = gridProperties.width,
                 height = gridProperties.height
@@ -272,15 +277,15 @@ namespace RenderMeshInstancedWithJobs {
 
         [Serializable]
         public struct SimulationProperties {
-            public int initialEpoch;
             public float advanceDelay;
+            public int initialEpoch;
         }
 
         [Serializable]
         public struct GridProperties {
+            public float offset;
             public int width;
             public int height;
-            public float offset;
         }
 
         [Serializable]
@@ -294,9 +299,9 @@ namespace RenderMeshInstancedWithJobs {
         }
 
         public struct SimulationInput {
-            public bool mouseClicked;
-            public MouseKey mouseKey;
             public Vector3 screenPos;
+            public MouseKey mouseKey;
+            public bool mouseClicked;
             public bool spaceKeyDown;
         }
 
