@@ -430,6 +430,7 @@ MonoBehaviour:
   simulationProperties:
     initialEpoch: 0
     advanceDelay: 0.25
+  chunksCount: 4
 --- !u!1001 &975311380
 PrefabInstance:
   m_ObjectHideFlags: 0

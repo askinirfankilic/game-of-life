@@ -1,6 +1,9 @@
 using System;
-
+using Unity.Collections;
 using UnityEngine;
+using Unity.Jobs;
+using Unity.Burst;
+using Unity.Mathematics;
 
 namespace RenderMeshInstancedWithJobs {
     public class GameOfLifeRenderMeshInstancedWithJobs : MonoBehaviour {
@@ -31,16 +34,37 @@ namespace RenderMeshInstancedWithJobs {
         private Vector4[] _batchColors;
         private Matrix4x4[] _batchMatrices;
 
+        private int _chunksCount;
+        private NativeArray<CellState> _currentStates;
+        private NativeArray<CellState> _nextStates;
+        private NativeArray<int> _neighborCounts;
+
         private void Awake() {
+            _chunksCount = SystemInfo.processorCount;
             _camera = Camera.main;
             _propertyBlock = new MaterialPropertyBlock();
             _batchColors = new Vector4[1023];
             _batchMatrices = new Matrix4x4[1023];
+
             InitializeGrid(in gridProperties);
+
+            int totalCells = gridProperties.width * gridProperties.height;
+            _currentStates = new NativeArray<CellState>(totalCells, Allocator.Persistent);
+            _nextStates = new NativeArray<CellState>(totalCells, Allocator.Persistent);
+            _neighborCounts = new NativeArray<int>(totalCells, Allocator.Persistent);
+
+            for (int i = 0; i < totalCells; i++) {
+                _currentStates[i] = _states[i];
+            }
+        }
+
+        private void OnDestroy() {
+            if (_currentStates.IsCreated) _currentStates.Dispose();
+            if (_nextStates.IsCreated) _nextStates.Dispose();
+            if (_neighborCounts.IsCreated) _neighborCounts.Dispose();
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
-            Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}");
             int count = gridProperties.height * gridProperties.width;
             _matrices = new Matrix4x4[count];
             _colors = new Vector4[count];
@@ -66,19 +90,17 @@ namespace RenderMeshInstancedWithJobs {
                     _cellProperties[id].neighborCount = 0;
                     _colors[id] = Color.black;
                 }
-
             }
 
+            Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}, chunksCount: {_chunksCount}");
         }
-
-
 
         private void Update() {
             if (!_simulationStarted) {
                 var input = _inputModule.Update();
 
                 if (input.spaceKeyDown) {
-                    Debug.Log("simulation started");
+                    Debug.Log("Simulation started.");
                     _simulationStarted = true;
                     return;
                 }
@@ -111,7 +133,6 @@ namespace RenderMeshInstancedWithJobs {
                     }
                 }
             }
-
             else {
                 _t += Time.deltaTime;
                 if (_t > simulationProperties.advanceDelay) {
@@ -123,81 +144,100 @@ namespace RenderMeshInstancedWithJobs {
             RenderInstances();
         }
 
-        private void Simulate() {
-            _iteration++;
-            RefreshCellNeighbors();
-            ApplySimulationLogic();
-            Debug.Log("Advance iteration: " + _iteration);
-        }
+        [BurstCompile]
+        private struct CountNeighborsJob : IJobParallelFor {
+            [ReadOnly] public NativeArray<CellState> states;
+            public NativeArray<int> neighborCounts;
+            public int width;
+            public int height;
 
-        private void ApplySimulationLogic() {
-            for (int i = 0; i < _cellProperties.Length; i++) {
-                var id = i;
-                var cellProp = _cellProperties[id];
-                var state = _states[id];
-                if (state == CellState.Alive) {
-                    if (cellProp.neighborCount < 2) {
-                        TrySetState(i, CellState.Death);
-                    }
+            public void Execute(int index) {
+                int count = 0;
+                int row = index / width;
+                int col = index % width;
 
-                    if (cellProp.neighborCount > 3) {
-                        TrySetState(id, CellState.Death);
-                    }
-                }
+                for (int i = -1; i <= 1; i++) {
+                    for (int j = -1; j <= 1; j++) {
+                        if (i == 0 && j == 0) continue;
 
-                else {
-                    if (cellProp.neighborCount == 3) {
-                        TrySetState(id, CellState.Alive);
-                    }
-                }
-            }
-        }
+                        int newRow = row + i;
+                        int newCol = col + j;
 
-        private void RefreshCellNeighbors() {
-            for (int i = 0; i < _cellProperties.Length; i++) {
-                int id = i;
-                _cellProperties[id].neighborCount = 0;
-                GetCellCoordinate(id, gridProperties.width, gridProperties.height, out int hIndex, out int wIndex);
-                int[] directions = new int[8];
-                int left = GetCellID(hIndex, wIndex - 1, gridProperties.height, gridProperties.width);
-                int leftUp = GetCellID(hIndex + 1, wIndex - 1, gridProperties.height, gridProperties.width);
-                int up = GetCellID(hIndex + 1, wIndex, gridProperties.height, gridProperties.width);
-                int rightUp = GetCellID(hIndex + 1, wIndex + 1, gridProperties.height, gridProperties.width);
-                int right = GetCellID(hIndex, wIndex + 1, gridProperties.height, gridProperties.width);
-                int rightDown = GetCellID(hIndex - 1, wIndex + 1, gridProperties.height, gridProperties.width);
-                int down = GetCellID(hIndex - 1, wIndex, gridProperties.height, gridProperties.width);
-                int leftDown = GetCellID(hIndex - 1, wIndex - 1, gridProperties.height, gridProperties.width);
-
-                directions[0] = left;
-                directions[1] = leftUp;
-                directions[2] = up;
-                directions[3] = rightUp;
-                directions[4] = right;
-                directions[5] = rightDown;
-                directions[6] = down;
-                directions[7] = leftDown;
-
-                for (int j = 0; j < directions.Length; j++) {
-                    var directionID = directions[j];
-                    if (IsValid(directionID)) {
-                        if (_states[directionID] == CellState.Alive) {
-                            _cellProperties[id].neighborCount++;
+                        if (newRow >= 0 && newRow < height && newCol >= 0 && newCol < width) {
+                            int neighborIndex = newRow * width + newCol;
+                            if (states[neighborIndex] == CellState.Alive) {
+                                count++;
+                            }
                         }
                     }
                 }
+
+                neighborCounts[index] = count;
             }
         }
 
-        private bool IsValid(int id) {
-            if (id < 0) {
-                return false;
-            }
+        [BurstCompile]
+        private struct UpdateStatesJob : IJobParallelFor {
+            [ReadOnly] public NativeArray<int> neighborCounts;
+            [ReadOnly] public NativeArray<CellState> currentStates;
+            public NativeArray<CellState> nextStates;
 
-            if (id > (gridProperties.height * gridProperties.width - 1)) {
-                return false;
-            }
+            public void Execute(int index) {
+                int neighbors = neighborCounts[index];
+                CellState currentState = currentStates[index];
 
-            return true;
+                if (currentState == CellState.Alive) {
+                    if (neighbors < 2 || neighbors > 3) {
+                        nextStates[index] = CellState.Death;
+                    }
+                    else {
+                        nextStates[index] = CellState.Alive;
+                    }
+                }
+                else {
+                    nextStates[index] = (neighbors == 3) ? CellState.Alive : CellState.Death;
+                }
+            }
+        }
+
+        private void Simulate() {
+            _iteration++;
+            int totalCells = gridProperties.width * gridProperties.height;
+
+            var countJob = new CountNeighborsJob {
+                states = _currentStates,
+                neighborCounts = _neighborCounts,
+                width = gridProperties.width,
+                height = gridProperties.height
+            };
+
+            var countHandle = countJob.Schedule(totalCells, _chunksCount);
+
+            var updateJob = new UpdateStatesJob {
+                neighborCounts = _neighborCounts,
+                currentStates = _currentStates,
+                nextStates = _nextStates
+            };
+
+            var updateHandle = updateJob.Schedule(totalCells, _chunksCount, countHandle);
+            updateHandle.Complete();
+
+            SwapAndUpdateBuffers();
+            Debug.Log("Advance iteration: " + _iteration);
+        }
+
+        private void SwapAndUpdateBuffers() {
+            var temp = _currentStates;
+            _currentStates = _nextStates;
+            _nextStates = temp;
+
+            for (int i = 0; i < _states.Length; i++) {
+                CellState newState = _currentStates[i];
+                if (_states[i] != newState) {
+                    _states[i] = newState;
+                    _colors[i] = newState == CellState.Alive ? Color.white : Color.black;
+                }
+            }
         }
 
         private void TrySetState(int id, CellState state) {
@@ -206,6 +246,7 @@ namespace RenderMeshInstancedWithJobs {
             }
 
             _states[id] = state;
+            _currentStates[id] = state;
             _colors[id] = state == CellState.Alive ? Color.white : Color.black;
         }
 
@@ -226,18 +267,7 @@ namespace RenderMeshInstancedWithJobs {
             if (widthIndex >= width || widthIndex < 0) {
                 return -1;
             }
-            return heightIndex * height + widthIndex;
-        }
-
-
-
-        public static void GetCellCoordinate(int id, int width, int height, out int heightIndex, out int widthIndex) {
-            // w10 h10 id 0
-            //hi 0, wi 0
-            // id = 5
-            // hi = 0, wi = 5
-            widthIndex = id % width;
-            heightIndex = id / height;
+            return heightIndex * width + widthIndex;
         }
 
         [Serializable]
@@ -253,9 +283,7 @@ namespace RenderMeshInstancedWithJobs {
             public float offset;
         }
 
-
         [Serializable]
-
         public enum CellState {
             Death,
             Alive,
@@ -303,7 +331,6 @@ namespace RenderMeshInstancedWithJobs {
         }
 
         private void RenderInstances() {
-            Debug.Log($"Rendering {_matrices.Length} instances");
             int batchSize = 1023;
             int totalInstances = _matrices.Length;
             int batchCount = Mathf.CeilToInt((float) totalInstances / batchSize);
