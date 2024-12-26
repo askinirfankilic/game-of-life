@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace RenderMeshInstancedWithComputeShader {
@@ -30,10 +31,12 @@ namespace RenderMeshInstancedWithComputeShader {
         private Vector4[] _batchColors;
         private Matrix4x4[] _batchMatrices;
 
+
         private ComputeBuffer _statesBuffer;
         private ComputeBuffer _nextStatesBuffer;
+        private CellData[] _statesCache;
+
         private int _kernelIndex;
-        private int[] _statesCache;
 
         private void Awake() {
             _camera = Camera.main;
@@ -49,17 +52,21 @@ namespace RenderMeshInstancedWithComputeShader {
             _kernelIndex = computeShader.FindKernel("CSMain");
 
             int totalCells = gridProperties.width * gridProperties.height;
-            _statesCache = new int[totalCells];
-            _statesBuffer = new ComputeBuffer(totalCells, sizeof(int));
-            _nextStatesBuffer = new ComputeBuffer(totalCells, sizeof(int));
+            int stride = sizeof(int) + 4 * sizeof(float); // state + color
+            _statesBuffer = new ComputeBuffer(totalCells, stride);
+            _nextStatesBuffer = new ComputeBuffer(totalCells, stride);
+            _statesCache = new CellData[totalCells];
 
-            int[] initialStates = new int[totalCells];
+            var initialData = new CellData[totalCells];
             for (int i = 0; i < totalCells; i++) {
-                initialStates[i] = _states[i] == CellState.Alive ? 1 : 0;
+                initialData[i] = new CellData {
+                    state = _states[i] == CellState.Alive ? 1 : 0,
+                    color = _colors[i]
+                };
             }
 
-            _statesBuffer.SetData(initialStates);
-            _nextStatesBuffer.SetData(initialStates);
+            _statesBuffer.SetData(initialData);
+            _nextStatesBuffer.SetData(initialData);
         }
 
         private void OnDestroy() {
@@ -176,10 +183,11 @@ namespace RenderMeshInstancedWithComputeShader {
             _statesBuffer.GetData(_statesCache);
 
             for (int i = 0; i < _statesCache.Length; i++) {
-                CellState newState = _statesCache[i] == 1 ? CellState.Alive : CellState.Death;
+                var cellData = _statesCache[i];
+                CellState newState = cellData.state == 1 ? CellState.Alive : CellState.Death;
                 if (_states[i] != newState) {
                     _states[i] = newState;
-                    _colors[i] = newState == CellState.Alive ? Color.white : Color.black;
+                    _colors[i] = cellData.color;
                 }
             }
         }
@@ -190,8 +198,11 @@ namespace RenderMeshInstancedWithComputeShader {
             _states[id] = state;
             _colors[id] = state == CellState.Alive ? Color.white : Color.black;
 
-            int[] states = new int[1] { state == CellState.Alive ? 1 : 0 };
-            _statesBuffer.SetData(states, 0, id, 1);
+            var cellData = new CellData {
+                state = state == CellState.Alive ? 1 : 0,
+                color = _colors[id]
+            };
+            _statesBuffer.SetData(new[] { cellData }, 0, id, 1);
         }
 
         private static bool RectangleCheck(Vector3 mousePos, Vector3 pos, float offset) {
@@ -293,6 +304,12 @@ namespace RenderMeshInstancedWithComputeShader {
                     _propertyBlock
                 );
             }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct CellData {
+            public int state;
+            public Vector4 color;
         }
     }
 }

@@ -1,7 +1,12 @@
 #pragma kernel CSMain
 
-RWStructuredBuffer<int> _States;
-RWStructuredBuffer<int> _NextStates;
+struct CellData {
+    int state;
+    float4 color;
+};
+
+RWStructuredBuffer<CellData> _States;
+RWStructuredBuffer<CellData> _NextStates;
 int _Width;
 int _Height;
 
@@ -28,12 +33,12 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             
             int2 nPos = pos + int2(dx, dy);
             if (IsValid(nPos)) {
-                aliveNeighbors += _States[GetIndex(nPos)];
+                aliveNeighbors += _States[GetIndex(nPos)].state;
             }
         }
     }
 
-    int currentState = _States[GetIndex(pos)];
+    int currentState = _States[GetIndex(pos)].state;
     int nextState = 0;
 
     if (currentState == 1) {
@@ -44,5 +49,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         nextState = (aliveNeighbors == 3) ? 1 : 0;
     }
 
-    _NextStates[GetIndex(pos)] = nextState;
+    int index = GetIndex(pos);
+    _NextStates[index].state = nextState;
+    _NextStates[index].color = nextState == 1 ? float4(1, 1, 1, 1) : float4(0, 0, 0, 1);
 }
