@@ -1,21 +1,26 @@
 using System;
+
 using UnityEngine;
 
-namespace GameObjects {
+namespace RenderMeshInstanced {
     public class GameOfLifeRenderMeshInstanced : MonoBehaviour {
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
-        [SerializeField] private MeshRenderer cellRef;
-
+        [SerializeField] private Mesh cellMesh;
+        [SerializeField] private Material cellMaterial;
         [SerializeField] private GridProperties gridProperties;
         [SerializeField] private SimulationProperties simulationProperties;
 
-        private MeshRenderer[] _renderers;
+        private Matrix4x4[] _matrices;
+        private MaterialPropertyBlock _propertyBlock;
+        private Vector4[] _colors;
         private CellState[] _states;
         private Vector3[] _worldPositions;
         private CellProperties[] _cellProperties;
+
         private static readonly int c_color_hash = Shader.PropertyToID("_BaseColor");
+
         private Vector3 _positionCache = new Vector3(0, 0, 0);
         private SimulationInputModule _inputModule = new SimulationInputModule();
         private Camera _camera;
@@ -23,14 +28,22 @@ namespace GameObjects {
         private float _t = 0;
         private int _iteration = 0;
 
+        private Vector4[] _batchColors;
+        private Matrix4x4[] _batchMatrices;
+
         private void Awake() {
             _camera = Camera.main;
+            _propertyBlock = new MaterialPropertyBlock();
+            _batchColors = new Vector4[1023];
+            _batchMatrices = new Matrix4x4[1023];
             InitializeGrid(in gridProperties);
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
+            Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}");
             int count = gridProperties.height * gridProperties.width;
-            _renderers = new MeshRenderer[count];
+            _matrices = new Matrix4x4[count];
+            _colors = new Vector4[count];
             _states = new CellState[count];
             _worldPositions = new Vector3[count];
             _cellProperties = new CellProperties[count];
@@ -40,19 +53,25 @@ namespace GameObjects {
             for (int i = 0; i < gridProperties.height; i++) {
                 for (int j = 0; j < gridProperties.width; j++) {
                     int id = GetCellID(i, j, gridProperties.height, gridProperties.width);
-                    var instance = Instantiate(cellRef, transform);
                     _positionCache.Set(j * gridProperties.offset, i * gridProperties.offset, 0);
-                    instance.transform.position = _positionCache;
-                    _renderers[id] = instance;
+
+                    _matrices[id] = Matrix4x4.TRS(
+                        _positionCache,
+                        Quaternion.identity,
+                        Vector3.one
+                    );
+
                     _worldPositions[id] = _positionCache;
                     _states[id] = CellState.Death;
                     _cellProperties[id].neighborCount = 0;
-                    SetCellVisual(_states[id], _renderers[id]);
+                    _colors[id] = Color.black;
                 }
+
             }
 
-            StaticBatchingUtility.Combine(gameObject);
         }
+
+
 
         private void Update() {
             if (!_simulationStarted) {
@@ -73,10 +92,11 @@ namespace GameObjects {
                             if (RectangleCheck(mousePos, pos, gridProperties.offset)) {
                                 int id = i;
                                 TrySetState(id, CellState.Alive);
-                                return;
+                                break;
                             }
                         }
                     }
+
                     else {
                         var mousePos = _camera.ScreenToWorldPoint(input.screenPos);
                         mousePos = new Vector3(mousePos.x, mousePos.y, 0);
@@ -85,21 +105,22 @@ namespace GameObjects {
                             if (RectangleCheck(mousePos, pos, gridProperties.offset)) {
                                 int id = i;
                                 TrySetState(id, CellState.Death);
-                                return;
+                                break;
                             }
                         }
                     }
                 }
-
-                return;
             }
 
-
-            _t += Time.deltaTime;
-            if (_t > simulationProperties.advanceDelay) {
-                _t = 0;
-                Simulate();
+            else {
+                _t += Time.deltaTime;
+                if (_t > simulationProperties.advanceDelay) {
+                    _t = 0;
+                    Simulate();
+                }
             }
+
+            RenderInstances();
         }
 
         private void Simulate() {
@@ -116,13 +137,14 @@ namespace GameObjects {
                 var state = _states[id];
                 if (state == CellState.Alive) {
                     if (cellProp.neighborCount < 2) {
-                        TrySetState(id, CellState.Death);
+                        TrySetState(i, CellState.Death);
                     }
 
                     if (cellProp.neighborCount > 3) {
                         TrySetState(id, CellState.Death);
                     }
                 }
+
                 else {
                     if (cellProp.neighborCount == 3) {
                         TrySetState(id, CellState.Alive);
@@ -184,7 +206,7 @@ namespace GameObjects {
             }
 
             _states[id] = state;
-            SetCellVisual(_states[id], _renderers[id]);
+            _colors[id] = state == CellState.Alive ? Color.white : Color.black;
         }
 
         private static bool RectangleCheck(Vector3 mousePos, Vector3 pos, float offset) {
@@ -196,20 +218,6 @@ namespace GameObjects {
             return mousePos.x >= minX && mousePos.x < maxX && mousePos.y >= minY && mousePos.y < maxY;
         }
 
-        public static void SetCellVisual(CellState state, MeshRenderer renderer) {
-            Color color = default;
-            switch (state) {
-                case CellState.Death:
-                    color = Color.black;
-                    break;
-                case CellState.Alive:
-                    color = Color.white;
-                    break;
-            }
-
-            renderer.material.SetColor(c_color_hash, color);
-        }
-
         public static int GetCellID(int heightIndex, int widthIndex, int height, int width) {
             if (heightIndex >= height || heightIndex < 0) {
                 return -1;
@@ -218,10 +226,10 @@ namespace GameObjects {
             if (widthIndex >= width || widthIndex < 0) {
                 return -1;
             }
-
-
             return heightIndex * height + widthIndex;
         }
+
+
 
         public static void GetCellCoordinate(int id, int width, int height, out int heightIndex, out int widthIndex) {
             // w10 h10 id 0
@@ -245,7 +253,9 @@ namespace GameObjects {
             public float offset;
         }
 
+
         [Serializable]
+
         public enum CellState {
             Death,
             Alive,
@@ -288,8 +298,33 @@ namespace GameObjects {
                     input.screenPos = Input.mousePosition;
                     return input;
                 }
-
                 return default;
+            }
+        }
+
+        private void RenderInstances() {
+            Debug.Log($"Rendering {_matrices.Length} instances");
+            int batchSize = 1023;
+            int totalInstances = _matrices.Length;
+            int batchCount = Mathf.CeilToInt((float) totalInstances / batchSize);
+
+            for (int i = 0; i < batchCount; i++) {
+                int remainingInstances = totalInstances - (i * batchSize);
+                int currentBatchSize = Mathf.Min(batchSize, remainingInstances);
+
+                Array.Copy(_colors, i * batchSize, _batchColors, 0, currentBatchSize);
+                Array.Copy(_matrices, i * batchSize, _batchMatrices, 0, currentBatchSize);
+
+                _propertyBlock.SetVectorArray(c_color_hash, _batchColors);
+
+                Graphics.DrawMeshInstanced(
+                    cellMesh,
+                    0,
+                    cellMaterial,
+                    _batchMatrices,
+                    currentBatchSize,
+                    _propertyBlock
+                );
             }
         }
     }
