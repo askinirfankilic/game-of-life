@@ -1,0 +1,48 @@
+#pragma kernel CSMain
+
+RWStructuredBuffer<int> _States;
+RWStructuredBuffer<int> _NextStates;
+int _Width;
+int _Height;
+
+int GetIndex(int2 pos) {
+    return pos.y * _Width + pos.x;
+}
+
+bool IsValid(int2 pos) {
+    return pos.x >= 0 && pos.x < _Width && pos.y >= 0 && pos.y < _Height;
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height)
+        return;
+
+    int aliveNeighbors = 0;
+    int2 pos = int2(id.x, id.y);
+    
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            
+            int2 nPos = pos + int2(dx, dy);
+            if (IsValid(nPos)) {
+                aliveNeighbors += _States[GetIndex(nPos)];
+            }
+        }
+    }
+
+    int currentState = _States[GetIndex(pos)];
+    int nextState = 0;
+
+    if (currentState == 1) {
+        //alive
+        nextState = (aliveNeighbors == 2 || aliveNeighbors == 3) ? 1 : 0;
+    } else {
+        //dead
+        nextState = (aliveNeighbors == 3) ? 1 : 0;
+    }
+
+    _NextStates[GetIndex(pos)] = nextState;
+}

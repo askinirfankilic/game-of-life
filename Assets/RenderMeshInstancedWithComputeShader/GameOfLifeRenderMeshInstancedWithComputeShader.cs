@@ -1,8 +1,5 @@
 using System;
-using Unity.Collections;
 using UnityEngine;
-using Unity.Jobs;
-using Unity.Burst;
 
 namespace RenderMeshInstancedWithComputeShader {
     public class GameOfLifeRenderMeshInstancedWithComputeShader : MonoBehaviour {
@@ -11,6 +8,7 @@ namespace RenderMeshInstancedWithComputeShader {
         [Header("Space: start simulation")]
         [SerializeField] private Mesh cellMesh;
         [SerializeField] private Material cellMaterial;
+        [SerializeField] private ComputeShader computeShader;
         [SerializeField] private GridProperties gridProperties;
         [SerializeField] private SimulationProperties simulationProperties;
 
@@ -19,7 +17,6 @@ namespace RenderMeshInstancedWithComputeShader {
         private Vector4[] _colors;
         private CellState[] _states;
         private Vector3[] _worldPositions;
-        private CellProperties[] _cellProperties;
 
         private static readonly int c_color_hash = Shader.PropertyToID("_BaseColor");
 
@@ -33,38 +30,48 @@ namespace RenderMeshInstancedWithComputeShader {
         private Vector4[] _batchColors;
         private Matrix4x4[] _batchMatrices;
 
-        private int _chunksCount;
-        private NativeArray<CellState> _currentStates;
-        private NativeArray<CellState> _nextStates;
-        private NativeArray<int> _neighborCounts;
-        private NativeArray<int> _neighborOffsets;
+        private ComputeBuffer _statesBuffer;
+        private ComputeBuffer _nextStatesBuffer;
+        private int _kernelIndex;
+        private int[] _statesCache;
 
         private void Awake() {
-            _chunksCount = SystemInfo.processorCount;
             _camera = Camera.main;
             _propertyBlock = new MaterialPropertyBlock();
             _batchColors = new Vector4[1023];
             _batchMatrices = new Matrix4x4[1023];
 
-            _neighborOffsets = new NativeArray<int>(8, Allocator.Persistent);
-
             InitializeGrid(in gridProperties);
+            InitializeComputeShader();
+        }
+
+        private void InitializeComputeShader() {
+            _kernelIndex = computeShader.FindKernel("CSMain");
 
             int totalCells = gridProperties.width * gridProperties.height;
-            _currentStates = new NativeArray<CellState>(totalCells, Allocator.Persistent);
-            _nextStates = new NativeArray<CellState>(totalCells, Allocator.Persistent);
-            _neighborCounts = new NativeArray<int>(totalCells, Allocator.Persistent);
+            _statesCache = new int[totalCells];
+            _statesBuffer = new ComputeBuffer(totalCells, sizeof(int));
+            _nextStatesBuffer = new ComputeBuffer(totalCells, sizeof(int));
 
+            int[] initialStates = new int[totalCells];
             for (int i = 0; i < totalCells; i++) {
-                _currentStates[i] = _states[i];
+                initialStates[i] = _states[i] == CellState.Alive ? 1 : 0;
             }
+
+            _statesBuffer.SetData(initialStates);
+            _nextStatesBuffer.SetData(initialStates);
         }
 
         private void OnDestroy() {
-            if (_currentStates.IsCreated) _currentStates.Dispose();
-            if (_nextStates.IsCreated) _nextStates.Dispose();
-            if (_neighborCounts.IsCreated) _neighborCounts.Dispose();
-            if (_neighborOffsets.IsCreated) _neighborOffsets.Dispose();
+            if (_statesBuffer != null) {
+                _statesBuffer.Release();
+                _statesBuffer = null;
+            }
+
+            if (_nextStatesBuffer != null) {
+                _nextStatesBuffer.Release();
+                _nextStatesBuffer = null;
+            }
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
@@ -73,7 +80,6 @@ namespace RenderMeshInstancedWithComputeShader {
             _colors = new Vector4[count];
             _states = new CellState[count];
             _worldPositions = new Vector3[count];
-            _cellProperties = new CellProperties[count];
             _camera.orthographicSize = gridProperties.height / 2f;
             _camera.transform.position = new Vector3(gridProperties.width / 2f, gridProperties.height / 2f, _camera.transform.position.z);
 
@@ -90,12 +96,11 @@ namespace RenderMeshInstancedWithComputeShader {
 
                     _worldPositions[id] = _positionCache;
                     _states[id] = CellState.Death;
-                    _cellProperties[id].neighborCount = 0;
                     _colors[id] = Color.black;
                 }
             }
 
-            Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}, chunksCount: {_chunksCount}");
+            Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}");
         }
 
         private void Update() {
@@ -146,97 +151,32 @@ namespace RenderMeshInstancedWithComputeShader {
             RenderInstances();
         }
 
-        [BurstCompile]
-        private struct CountNeighborsJob : IJobParallelFor {
-            [ReadOnly] public NativeArray<CellState> states;
-            [ReadOnly] public NativeArray<int> neighborOffsets;
-            public NativeArray<int> neighborCounts;
-            public int width;
-            public int height;
-
-            public void Execute(int index) {
-                int count = 0;
-                int row = index / width;
-                int col = index % width;
-
-                for (int i = -1; i <= 1; i++) {
-                    for (int j = -1; j <= 1; j++) {
-                        if (i == 0 && j == 0) continue;
-
-                        int newRow = row + i;
-                        int newCol = col + j;
-
-                        if (newRow >= 0 && newRow < height && newCol >= 0 && newCol < width) {
-                            int neighborIndex = newRow * width + newCol;
-                            if (states[neighborIndex] == CellState.Alive) {
-                                count++;
-                            }
-                        }
-                    }
-                }
-
-                neighborCounts[index] = count;
-            }
-        }
-
-        [BurstCompile]
-        private struct UpdateStatesJob : IJobParallelFor {
-            [ReadOnly] public NativeArray<int> neighborCounts;
-            [ReadOnly] public NativeArray<CellState> currentStates;
-            public NativeArray<CellState> nextStates;
-
-            public void Execute(int index) {
-                int neighbors = neighborCounts[index];
-                CellState currentState = currentStates[index];
-
-                if (currentState == CellState.Alive) {
-                    if (neighbors < 2 || neighbors > 3) {
-                        nextStates[index] = CellState.Death;
-                    }
-                    else {
-                        nextStates[index] = CellState.Alive;
-                    }
-                }
-                else {
-                    nextStates[index] = (neighbors == 3) ? CellState.Alive : CellState.Death;
-                }
-            }
-        }
-
         private void Simulate() {
             _iteration++;
-            int totalCells = gridProperties.width * gridProperties.height;
 
-            var countJob = new CountNeighborsJob {
-                states = _currentStates,
-                neighborOffsets = _neighborOffsets,
-                neighborCounts = _neighborCounts,
-                width = gridProperties.width,
-                height = gridProperties.height
-            };
+            computeShader.SetBuffer(_kernelIndex, "_States", _statesBuffer);
+            computeShader.SetBuffer(_kernelIndex, "_NextStates", _nextStatesBuffer);
+            computeShader.SetInt("_Width", gridProperties.width);
+            computeShader.SetInt("_Height", gridProperties.height);
 
-            var countHandle = countJob.Schedule(totalCells, _chunksCount);
+            int threadGroupsX = Mathf.CeilToInt(gridProperties.width / 8.0f);
+            int threadGroupsY = Mathf.CeilToInt(gridProperties.height / 8.0f);
+            computeShader.Dispatch(_kernelIndex, threadGroupsX, threadGroupsY, 1);
 
-            var updateJob = new UpdateStatesJob {
-                neighborCounts = _neighborCounts,
-                currentStates = _currentStates,
-                nextStates = _nextStates
-            };
+            var temp = _statesBuffer;
+            _statesBuffer = _nextStatesBuffer;
+            _nextStatesBuffer = temp;
 
-            var updateHandle = updateJob.Schedule(totalCells, _chunksCount, countHandle);
-            updateHandle.Complete();
+            UpdateVisualStates();
 
-            SwapAndUpdateBuffers();
             Debug.Log("Advance iteration: " + _iteration);
         }
 
-        private void SwapAndUpdateBuffers() {
-            var temp = _currentStates;
-            _currentStates = _nextStates;
-            _nextStates = temp;
+        private void UpdateVisualStates() {
+            _statesBuffer.GetData(_statesCache);
 
-            for (int i = 0; i < _states.Length; i++) {
-                CellState newState = _currentStates[i];
+            for (int i = 0; i < _statesCache.Length; i++) {
+                CellState newState = _statesCache[i] == 1 ? CellState.Alive : CellState.Death;
                 if (_states[i] != newState) {
                     _states[i] = newState;
                     _colors[i] = newState == CellState.Alive ? Color.white : Color.black;
@@ -245,13 +185,13 @@ namespace RenderMeshInstancedWithComputeShader {
         }
 
         private void TrySetState(int id, CellState state) {
-            if (_states[id] == state) {
-                return;
-            }
+            if (_states[id] == state) return;
 
             _states[id] = state;
-            _currentStates[id] = state;
             _colors[id] = state == CellState.Alive ? Color.white : Color.black;
+
+            int[] states = new int[1] { state == CellState.Alive ? 1 : 0 };
+            _statesBuffer.SetData(states, 0, id, 1);
         }
 
         private static bool RectangleCheck(Vector3 mousePos, Vector3 pos, float offset) {
@@ -291,10 +231,6 @@ namespace RenderMeshInstancedWithComputeShader {
         public enum CellState {
             Death,
             Alive,
-        }
-
-        public struct CellProperties {
-            public int neighborCount;
         }
 
         public struct SimulationInput {
