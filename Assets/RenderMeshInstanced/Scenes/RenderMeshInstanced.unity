@@ -424,8 +424,8 @@ MonoBehaviour:
   cellMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   cellMaterial: {fileID: 2100000, guid: 10c9170920d594e838bbf997b8c176db, type: 2}
   gridProperties:
-    width: 100
-    height: 100
+    width: 1000
+    height: 1000
     offset: 1
   simulationProperties:
     initialEpoch: 0
