@@ -3,7 +3,6 @@ using Unity.Collections;
 using UnityEngine;
 using Unity.Jobs;
 using Unity.Burst;
-using Unity.Mathematics;
 
 namespace RenderMeshInstancedWithComputeShader {
     public class GameOfLifeRenderMeshInstancedWithComputeShader : MonoBehaviour {

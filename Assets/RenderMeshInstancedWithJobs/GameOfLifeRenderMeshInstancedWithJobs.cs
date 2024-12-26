@@ -3,7 +3,6 @@ using Unity.Collections;
 using UnityEngine;
 using Unity.Jobs;
 using Unity.Burst;
-using Unity.Mathematics;
 
 namespace RenderMeshInstancedWithJobs {
     public class GameOfLifeRenderMeshInstancedWithJobs : MonoBehaviour {
