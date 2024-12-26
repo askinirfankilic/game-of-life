@@ -38,6 +38,8 @@ namespace RenderMeshInstancedWithComputeShader {
 
         private int _kernelIndex;
 
+        private ComputeBuffer _matricesBuffer;
+
         private void Awake() {
             _camera = Camera.main;
             _propertyBlock = new MaterialPropertyBlock();
@@ -67,6 +69,9 @@ namespace RenderMeshInstancedWithComputeShader {
 
             _statesBuffer.SetData(initialData);
             _nextStatesBuffer.SetData(initialData);
+
+            _matricesBuffer = new ComputeBuffer(_matrices.Length, 16 * sizeof(float));
+            _matricesBuffer.SetData(_matrices);
         }
 
         private void OnDestroy() {
@@ -78,6 +83,11 @@ namespace RenderMeshInstancedWithComputeShader {
             if (_nextStatesBuffer != null) {
                 _nextStatesBuffer.Release();
                 _nextStatesBuffer = null;
+            }
+
+            if (_matricesBuffer != null) {
+                _matricesBuffer.Release();
+                _matricesBuffer = null;
             }
         }
 
@@ -282,28 +292,16 @@ namespace RenderMeshInstancedWithComputeShader {
         }
 
         private void RenderInstances() {
-            int batchSize = 1023;
-            int totalInstances = _matrices.Length;
-            int batchCount = Mathf.CeilToInt((float) totalInstances / batchSize);
+            cellMaterial.SetBuffer("_CellBuffer", _statesBuffer);
+            cellMaterial.SetBuffer("_Matrices", _matricesBuffer);
 
-            for (int i = 0; i < batchCount; i++) {
-                int remainingInstances = totalInstances - (i * batchSize);
-                int currentBatchSize = Mathf.Min(batchSize, remainingInstances);
-
-                Array.Copy(_colors, i * batchSize, _batchColors, 0, currentBatchSize);
-                Array.Copy(_matrices, i * batchSize, _batchMatrices, 0, currentBatchSize);
-
-                _propertyBlock.SetVectorArray(c_color_hash, _batchColors);
-
-                Graphics.DrawMeshInstanced(
-                    cellMesh,
-                    0,
-                    cellMaterial,
-                    _batchMatrices,
-                    currentBatchSize,
-                    _propertyBlock
-                );
-            }
+            Graphics.DrawMeshInstancedProcedural(
+                cellMesh,
+                0,
+                cellMaterial,
+                new Bounds(Vector3.zero, Vector3.one * 1000),
+                _matrices.Length
+            );
         }
 
         [StructLayout(LayoutKind.Sequential)]

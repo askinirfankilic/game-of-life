@@ -35,7 +35,22 @@ Shader "Custom/CellShaderCompute"
                 UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
             UNITY_INSTANCING_BUFFER_END(Props)
 
-            void setupInstancing() {}
+            struct CellData {
+                int state;
+                float4 color;
+            };
+
+            StructuredBuffer<CellData> _CellBuffer;
+            StructuredBuffer<float4x4> _Matrices;
+
+            void setupInstancing()
+            {
+                #ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
+                    unity_ObjectToWorld = _Matrices[unity_InstanceID];
+                    float4 color = _CellBuffer[unity_InstanceID].color;
+                    UNITY_ACCESS_INSTANCED_PROP(Props, _BaseColor) = color;
+                #endif
+            }
 
             Varyings vert(Attributes input)
             {
