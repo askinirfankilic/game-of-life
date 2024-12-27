@@ -70,3 +70,6 @@ Grid size: 1 million cells (1000x1000)
 2. Open in Unity
 3. Load one of the example scenes from the Scenes folder
 4. Press Play to run the simulation
+
+## Tools Used
+- [Graphy - Ultimate Stats Monitor](https://assetstore.unity.com/packages/tools/gui/graphy-ultimate-fps-counter-stats-monitor-debugger-105778) - For performance monitoring and FPS tracking
