@@ -4,6 +4,10 @@ using Common;
 
 namespace GameObjects {
     public class GameOfLifeMultipleGameObjects : MonoBehaviour {
+        [SerializeField] private UsageMode usageMode = UsageMode.LoadPatternFromFile;
+        [SerializeField] private string patternName = "3enginecordershipeater.cells";
+
+        [Header("Input only works when usageMode is WithMouse")]
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
@@ -27,6 +31,25 @@ namespace GameObjects {
         private void Awake() {
             _camera = Camera.main;
             InitializeGrid(in gridProperties);
+
+            if (usageMode == UsageMode.LoadPatternFromFile) {
+                ApplyPattern();
+                StartSimulation();
+            }
+        }
+
+        private void ApplyPattern() {
+            int[,] pattern = PatternLoader.Load(patternName, gridProperties.height, gridProperties.width);
+            for (int i = 0; i < gridProperties.height; i++) {
+                for (int j = 0; j < gridProperties.width; j++) {
+                    int id = GetCellID(i, j, gridProperties.height, gridProperties.width);
+                    TrySetState(id, pattern[i, j] == 1 ? CellState.Alive : CellState.Death);
+                }
+            }
+        }
+
+        private void StartSimulation() {
+            _simulationStarted = true;
         }
 
         private void InitializeGrid(in GridProperties gridProperties) {
@@ -56,7 +79,7 @@ namespace GameObjects {
         }
 
         private void Update() {
-            if (!_simulationStarted) {
+            if (usageMode == UsageMode.WithMouse && !_simulationStarted) {
                 var input = _inputModule.Update();
 
                 if (input.spaceKeyDown) {

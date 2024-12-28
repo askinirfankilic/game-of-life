@@ -421,14 +421,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81fff4398202142d9b2ce0650d068a83, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  usageMode: 1
+  patternName: 3enginecordershipeater.cells
   cellRef: {fileID: 4670247243852771998, guid: e1785e737bc1241579afaf0406bdbe28, type: 3}
   gridProperties:
-    width: 1000
-    height: 1000
+    width: 100
+    height: 100
     offset: 1
   simulationProperties:
     initialEpoch: 0
-    advanceDelay: 0.25
+    advanceDelay: 0.15
 --- !u!1001 &975311380
 PrefabInstance:
   m_ObjectHideFlags: 0
