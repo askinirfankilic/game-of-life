@@ -75,7 +75,6 @@ Grid size: 1 million cells (1000x1000)
 ## Requirements
 
 -   Unity 2022.3.49f1
--   This implementation does not provde Game Of Life levels from text files. You should prepare them at runtime.
 
 ## Getting Started
 
