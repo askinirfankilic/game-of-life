@@ -421,11 +421,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 817a1f44fc1cb4c4d9923f277efcde03, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  usageMode: 1
+  patternName: 3enginecordershipeater.cells
   cellMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   cellMaterial: {fileID: 2100000, guid: 10c9170920d594e838bbf997b8c176db, type: 2}
   gridProperties:
-    width: 1000
-    height: 1000
+    width: 100
+    height: 100
     offset: 1
   simulationProperties:
     initialEpoch: 0

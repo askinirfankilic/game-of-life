@@ -5,6 +5,9 @@ using Common;
 
 namespace RenderMeshInstancedWithComputeShader {
     public class GameOfLifeRenderMeshInstancedWithComputeShader : MonoBehaviour {
+        [SerializeField] private UsageMode usageMode = UsageMode.LoadPatternFromFile;
+        [SerializeField] private string patternName = "3enginecordershipeater.cells";
+
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
@@ -15,7 +18,6 @@ namespace RenderMeshInstancedWithComputeShader {
         [SerializeField] private SimulationProperties simulationProperties;
 
         private Matrix4x4[] _matrices;
-        private MaterialPropertyBlock _propertyBlock;
         private Vector4[] _colors;
         private CellState[] _states;
         private Vector3[] _worldPositions;
@@ -27,10 +29,6 @@ namespace RenderMeshInstancedWithComputeShader {
         private float _t = 0;
         private int _iteration = 0;
 
-        private Vector4[] _batchColors;
-        private Matrix4x4[] _batchMatrices;
-
-
         private ComputeBuffer _statesBuffer;
         private ComputeBuffer _nextStatesBuffer;
         private CellData[] _statesCache;
@@ -41,12 +39,28 @@ namespace RenderMeshInstancedWithComputeShader {
 
         private void Awake() {
             _camera = Camera.main;
-            _propertyBlock = new MaterialPropertyBlock();
-            _batchColors = new Vector4[1023];
-            _batchMatrices = new Matrix4x4[1023];
 
             InitializeGrid(in gridProperties);
             InitializeComputeShader();
+
+            if (usageMode == UsageMode.LoadPatternFromFile) {
+                ApplyPattern();
+                StartSimulation();
+            }
+        }
+
+        private void ApplyPattern() {
+            int[,] pattern = PatternLoader.Load(patternName, gridProperties.height, gridProperties.width);
+            for (int i = 0; i < gridProperties.height; i++) {
+                for (int j = 0; j < gridProperties.width; j++) {
+                    int id = GetCellID(i, j, gridProperties.height, gridProperties.width);
+                    TrySetState(id, pattern[i, j] == 1 ? CellState.Alive : CellState.Death);
+                }
+            }
+        }
+
+        private void StartSimulation() {
+            _simulationStarted = true;
         }
 
         private void InitializeComputeShader() {
@@ -120,7 +134,7 @@ namespace RenderMeshInstancedWithComputeShader {
         }
 
         private void Update() {
-            if (!_simulationStarted) {
+            if (usageMode == UsageMode.WithMouse && !_simulationStarted) {
                 var input = _inputModule.Update();
 
                 if (input.spaceKeyDown) {
