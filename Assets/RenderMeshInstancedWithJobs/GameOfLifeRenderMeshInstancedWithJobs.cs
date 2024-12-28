@@ -3,9 +3,15 @@ using Unity.Collections;
 using UnityEngine;
 using Unity.Jobs;
 using Unity.Burst;
+using Common;
+using System.Linq;
 
 namespace RenderMeshInstancedWithJobs {
     public class GameOfLifeRenderMeshInstancedWithJobs : MonoBehaviour {
+        [SerializeField] private UsageMode usageMode = UsageMode.LoadPatternFromFile;
+        [SerializeField] private string patternName = "3enginecordershipeater.cells";
+
+        [Header("Input only works when usageMode is WithMouse")]
         [Header("Left Mouse Button: set cell alive")]
         [Header("Right Mouse Button: set cell dead")]
         [Header("Space: start simulation")]
@@ -58,6 +64,15 @@ namespace RenderMeshInstancedWithJobs {
             for (int i = 0; i < totalCells; i++) {
                 _currentStates[i] = _states[i];
             }
+
+            if (usageMode == UsageMode.LoadPatternFromFile) {
+                ApplyPattern();
+                StartSimulation();
+            }
+        }
+
+        private void StartSimulation() {
+            _simulationStarted = true;
         }
 
         private void OnDestroy() {
@@ -98,8 +113,20 @@ namespace RenderMeshInstancedWithJobs {
             Debug.Log($"Initializing grid: {gridProperties.width}x{gridProperties.height}, offset: {gridProperties.offset}, chunksCount: {_chunksCount}");
         }
 
+        private void ApplyPattern() {
+            int[,] pattern = PatternLoader.Load(patternName, gridProperties.height, gridProperties.width);
+            for (int i = 0; i < gridProperties.height; i++) {
+                for (int j = 0; j < gridProperties.width; j++) {
+                    int id = GetCellID(i, j, gridProperties.height, gridProperties.width);
+                    TrySetState(id, pattern[i, j] == 1 ? CellState.Alive : CellState.Death);
+                }
+            }
+
+            Debug.Log($"Number of alive cells: {_states.Count(state => state == CellState.Alive)}, number of dead cells: {_states.Count(state => state == CellState.Death)}");
+        }
+
         private void Update() {
-            if (!_simulationStarted) {
+            if (usageMode == UsageMode.WithMouse && !_simulationStarted) {
                 var input = _inputModule.Update();
 
                 if (input.spaceKeyDown) {
@@ -287,7 +314,6 @@ namespace RenderMeshInstancedWithJobs {
             public int height;
         }
 
-        [Serializable]
         public enum CellState {
             Death,
             Alive,
@@ -295,43 +321,6 @@ namespace RenderMeshInstancedWithJobs {
 
         public struct CellProperties {
             public int neighborCount;
-        }
-
-        public struct SimulationInput {
-            public Vector3 screenPos;
-            public MouseKey mouseKey;
-            public bool mouseClicked;
-            public bool spaceKeyDown;
-        }
-
-        public enum MouseKey {
-            Left = 0,
-            Right = 1,
-        }
-
-        public struct SimulationInputModule {
-            public SimulationInput Update() {
-                var input = new SimulationInput();
-                if (Input.GetKeyDown(KeyCode.Space)) {
-                    input.spaceKeyDown = true;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(0) || Input.GetMouseButton(0)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Left;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(1) || Input.GetMouseButton(1)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Right;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-                return default;
-            }
         }
 
         private void RenderInstances() {

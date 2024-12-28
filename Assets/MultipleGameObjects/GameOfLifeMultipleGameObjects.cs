@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Common;
 
 namespace GameObjects {
     public class GameOfLifeMultipleGameObjects : MonoBehaviour {
@@ -224,10 +225,6 @@ namespace GameObjects {
         }
 
         public static void GetCellCoordinate(int id, int width, int height, out int heightIndex, out int widthIndex) {
-            // w10 h10 id 0
-            //hi 0, wi 0
-            // id = 5
-            // hi = 0, wi = 5
             widthIndex = id % width;
             heightIndex = id / height;
         }
@@ -245,7 +242,6 @@ namespace GameObjects {
             public float offset;
         }
 
-        [Serializable]
         public enum CellState {
             Death,
             Alive,
@@ -253,44 +249,6 @@ namespace GameObjects {
 
         public struct CellProperties {
             public int neighborCount;
-        }
-
-        public struct SimulationInput {
-            public bool mouseClicked;
-            public MouseKey mouseKey;
-            public Vector3 screenPos;
-            public bool spaceKeyDown;
-        }
-
-        public enum MouseKey {
-            Left = 0,
-            Right = 1,
-        }
-
-        public struct SimulationInputModule {
-            public SimulationInput Update() {
-                var input = new SimulationInput();
-                if (Input.GetKeyDown(KeyCode.Space)) {
-                    input.spaceKeyDown = true;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(0) || Input.GetMouseButton(0)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Left;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(1) || Input.GetMouseButton(1)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Right;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-
-                return default;
-            }
         }
     }
 }

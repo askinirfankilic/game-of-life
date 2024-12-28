@@ -426,8 +426,8 @@ MonoBehaviour:
   computeShader: {fileID: 7200000, guid: deba0b0bdd1b647f3823c09487911241, type: 3}
   gridProperties:
     offset: 1
-    width: 1000
-    height: 1000
+    width: 20
+    height: 20
   simulationProperties:
     advanceDelay: 0.25
     initialEpoch: 0

@@ -421,14 +421,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c318fac8eaeca4d9aa9bd035b89eb6be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  usageMode: 1
+  patternName: 3enginecordershipeater.cells
   cellMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   cellMaterial: {fileID: 2100000, guid: 8b6763f64cf2e47449e8da474944b5cc, type: 2}
   gridProperties:
     offset: 1
-    width: 1000
-    height: 1000
+    width: 100
+    height: 100
   simulationProperties:
-    advanceDelay: 0.25
+    advanceDelay: 0.15
     initialEpoch: 0
 --- !u!1001 &975311380
 PrefabInstance:
@@ -441,6 +443,10 @@ PrefabInstance:
     - target: {fileID: 177638, guid: 0abab5bb77339e4428787a870eb31bd3, type: 3}
       propertyPath: m_Name
       value: '[Graphy]'
+      objectReference: {fileID: 0}
+    - target: {fileID: 177638, guid: 0abab5bb77339e4428787a870eb31bd3, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 22451668, guid: 0abab5bb77339e4428787a870eb31bd3, type: 3}
       propertyPath: m_Pivot.x

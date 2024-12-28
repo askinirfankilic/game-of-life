@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using Common;
 
 namespace RenderMeshInstancedWithComputeShader {
     public class GameOfLifeRenderMeshInstancedWithComputeShader : MonoBehaviour {
@@ -18,8 +19,6 @@ namespace RenderMeshInstancedWithComputeShader {
         private Vector4[] _colors;
         private CellState[] _states;
         private Vector3[] _worldPositions;
-
-        private static readonly int c_color_hash = Shader.PropertyToID("_BaseColor");
 
         private Vector3 _positionCache = new Vector3(0, 0, 0);
         private SimulationInputModule _inputModule = new SimulationInputModule();
@@ -248,47 +247,9 @@ namespace RenderMeshInstancedWithComputeShader {
             public int height;
         }
 
-        [Serializable]
         public enum CellState {
             Death,
             Alive,
-        }
-
-        public struct SimulationInput {
-            public Vector3 screenPos;
-            public MouseKey mouseKey;
-            public bool mouseClicked;
-            public bool spaceKeyDown;
-        }
-
-        public enum MouseKey {
-            Left = 0,
-            Right = 1,
-        }
-
-        public struct SimulationInputModule {
-            public SimulationInput Update() {
-                var input = new SimulationInput();
-                if (Input.GetKeyDown(KeyCode.Space)) {
-                    input.spaceKeyDown = true;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(0) || Input.GetMouseButton(0)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Left;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(1) || Input.GetMouseButton(1)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Right;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-                return default;
-            }
         }
 
         private void RenderInstances() {

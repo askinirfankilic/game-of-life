@@ -1,6 +1,6 @@
 using System;
-
 using UnityEngine;
+using Common;
 
 namespace RenderMeshInstanced {
     public class GameOfLifeRenderMeshInstanced : MonoBehaviour {
@@ -71,8 +71,6 @@ namespace RenderMeshInstanced {
 
         }
 
-
-
         private void Update() {
             if (!_simulationStarted) {
                 var input = _inputModule.Update();
@@ -111,7 +109,6 @@ namespace RenderMeshInstanced {
                     }
                 }
             }
-
             else {
                 _t += Time.deltaTime;
                 if (_t > simulationProperties.advanceDelay) {
@@ -254,8 +251,6 @@ namespace RenderMeshInstanced {
         }
 
 
-        [Serializable]
-
         public enum CellState {
             Death,
             Alive,
@@ -263,43 +258,6 @@ namespace RenderMeshInstanced {
 
         public struct CellProperties {
             public int neighborCount;
-        }
-
-        public struct SimulationInput {
-            public bool mouseClicked;
-            public MouseKey mouseKey;
-            public Vector3 screenPos;
-            public bool spaceKeyDown;
-        }
-
-        public enum MouseKey {
-            Left = 0,
-            Right = 1,
-        }
-
-        public struct SimulationInputModule {
-            public SimulationInput Update() {
-                var input = new SimulationInput();
-                if (Input.GetKeyDown(KeyCode.Space)) {
-                    input.spaceKeyDown = true;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(0) || Input.GetMouseButton(0)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Left;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-
-                if (Input.GetMouseButtonDown(1) || Input.GetMouseButton(1)) {
-                    input.mouseClicked = true;
-                    input.mouseKey = MouseKey.Right;
-                    input.screenPos = Input.mousePosition;
-                    return input;
-                }
-                return default;
-            }
         }
 
         private void RenderInstances() {
